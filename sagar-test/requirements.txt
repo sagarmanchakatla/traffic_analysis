@@ -1,6 +1,8 @@
 flask
-opencv-python
 ultralytics
-gunicorn
+opencv-python
 flask-cors
 numpy
+gunicorn
+flask-socketio
+eventlet
