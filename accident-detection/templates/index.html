@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>Accident Detection System</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;         /* neutral background */
+      --card: #ffffff;       /* card background */
+      --text: #111827;       /* primary text */
+      --muted: #6b7280;      /* muted text */
+      --primary: #2563eb;    /* brand blue */
+      --danger: #ef4444;     /* alert red */
+      --success: #22c55e;    /* live indicator */
+      --radius: 12px;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+        Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+        "Noto Color Emoji", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1200px;
+      padding: 24px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0 8px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      margin-bottom: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .brand h1 {
+      font-size: 1.375rem; /* ~22px */
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--success);
+      position: relative;
+      flex: 0 0 8px;
+    }
+
+    .dot::after {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border-radius: 999px;
+      border: 2px solid rgba(34, 197, 94, 0.4);
+      animation: pulse 1.6s ease-out infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.9; }
+      70% { transform: scale(1.1); opacity: 0.3; }
+      100% { transform: scale(0.9); opacity: 0; }
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    @media (min-width: 900px) {
+      main {
+        grid-template-columns: 2fr 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 16px;
+    }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+
+    .video-wrap {
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+      display: block;
+    }
+
+    #video-feed {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat {
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .stat .label {
+      font-size: 0.8125rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .stat .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .logs-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(0,0,0,0.12);
+      background: #fff;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 0.875rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .btn:hover {
+      background: #f9fafb;
+      border-color: rgba(0,0,0,0.18);
+    }
+
+    .btn-danger {
+      border-color: rgba(239, 68, 68, 0.35);
+      color: var(--danger);
+    }
+
+    .btn-danger:hover {
+      background: #fff1f2;
+      border-color: var(--danger);
+    }
+
+    .logs {
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 10px;
+      background: #fafafa;
+      padding: 8px;
+    }
+
+    .log {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      background: #fff;
+      border-left: 3px solid var(--danger);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 8px;
+    }
+
+    .log-time {
+      font-weight: 600;
+      font-size: 0.9375rem;
+    }
+
+    .prob {
+      background: var(--danger);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.8125rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      font-style: italic;
+      padding: 40px 0;
+    }
+
+    footer {
+      margin-top: 16px;
+      padding: 16px 0 8px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+      font-size: 0.8125rem;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand" aria-label="Application title">
+        <h1>Accident Detection System</h1>
+      </div>
+      <div class="badge-live" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>
+        Live
+      </div>
+    </header>
+
+    <main role="main">
+      <section class="card" aria-labelledby="video-title">
+        <h2 id="video-title" class="section-title">Video feed</h2>
+        <div class="video-wrap">
+          <img
+            id="video-feed"
+            src="{{ url_for('video_feed') }}"
+            alt="Live camera feed"
+          />
+        </div>
+      </section>
+
+      <aside class="card" aria-labelledby="stats-title">
+        <h2 id="stats-title" class="section-title">Statistics</h2>
+        <div class="stats-grid">
+          <div class="stat" aria-live="polite">
+            <div class="label">Total accidents detected</div>
+            <div id="total-accidents" class="value">0</div>
+          </div>
+          <div class="stat" aria-live="polite">
+            <div class="label">Last detection</div>
+            <div id="last-detection" class="value">-</div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="card" style="grid-column: 1 / -1" aria-labelledby="logs-title">
+        <div class="logs-header">
+          <h2 id="logs-title" class="section-title">Detection logs</h2>
+          <button class="btn btn-danger" type="button" onclick="clearLogs()">Clear logs</button>
+        </div>
+        <div
+          id="logs-container"
+          class="logs"
+          aria-live="polite"
+          aria-busy="false"
+        >
+          <div class="empty">No accidents detected yet</div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      This interface updates automatically every few seconds.
+    </footer>
+  </div>
+
+  <script>
+    // Minimal, readable JS with subtle UX improvements
+    let previousLogCount = 0;
+
+    function renderLogs(data) {
+      const container = document.getElementById('logs-container');
+      const totalAccidents = document.getElementById('total-accidents');
+      const lastDetection = document.getElementById('last-detection');
+
+      totalAccidents.textContent = data.length;
+
+      if (!Array.isArray(data) || data.length === 0) {
+        lastDetection.textContent = '-';
+        container.innerHTML = '<div class="empty">No accidents detected yet</div>';
+        return;
+      }
+
+      // Display newest first without mutating original
+      const items = [...data].reverse();
+
+      // Update last detection using newest item
+      lastDetection.textContent = items[0]?.timestamp || '-';
+
+      // Build logs
+      container.innerHTML = items
+        .map(
+          (log) => `
+            <div class="log">
+              <span class="log-time">${log.timestamp}</span>
+              <span class="prob">${log.probability}%</span>
+            </div>
+          `
+        )
+        .join('');
+
+      previousLogCount = data.length;
+    }
+
+    async function fetchLogs() {
+  const container = document.getElementById('logs-container');
+  container.setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch('/accident_logs');
+    const data = await response.json();
+    renderLogs(data.logs);   // ✅ FIX
+  } catch (err) {
+    console.error("Fetch logs error:", err);
+  } finally {
+    container.setAttribute('aria-busy', 'false');
+  }
+}
+
+    async function clearLogs() {
+      if (!confirm('Clear all logs?')) return;
+      const container = document.getElementById('logs-container');
+      container.setAttribute('aria-busy', 'true');
+      try {
+        const response = await fetch('/clear_logs', { method: 'POST' });
+        const data = await response.json();
+        if (data && data.status === 'success') {
+          previousLogCount = 0;
+          renderLogs([]);
+        }
+      } catch (err) {
+        // silent fail
+      } finally {
+        container.setAttribute('aria-busy', 'false');
+      }
+    }
+
+    // Initial and interval polling
+    fetchLogs();
+    setInterval(fetchLogs, 2000);
+  </script>
+</body>
+</html>
