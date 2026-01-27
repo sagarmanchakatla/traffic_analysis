@@ -36,30 +36,67 @@ export default function AccidentPage() {
     lng: 72.8194
   });
 
+  const [emergencyServices, setEmergencyServices] = useState<Array<{
+  name: string;
+  icon: string;
+  distance: string;
+  eta: string;
+}>>([]);
+
+
   /* ---------------- FETCH PREDICTIONS ---------------- */
 
-  const fetchPredictions = useCallback(async () => {
-    try {
-      const res = await fetch("http://localhost:5002/accident_status");
-      const data = await res.json();
+  // const fetchPredictions = useCallback(async () => {
+  //   try {
+  //     const res = await fetch("http://localhost:5002/accident_status");
+  //     const data = await res.json();
 
-      if (data.lanes) {
-        setLanePredictions(data.lanes);
-      }
+  //     if (data.lanes) {
+  //       setLanePredictions(data.lanes);
+  //     }
 
-      if (data.latest) {
-        setAccidentLane(data.latest.lane);
-        setEmergencyMode(true);
-      } else {
-        setAccidentLane(null);
-        setEmergencyMode(false);
-      }
+  //     if (data.latest) {
+  //       setAccidentLane(data.latest.lane);
+  //       setEmergencyMode(true);
+  //     } else {
+  //       setAccidentLane(null);
+  //       setEmergencyMode(false);
+  //     }
 
-    } catch (err) {
-      console.error("Prediction fetch error:", err);
+  //   } catch (err) {
+  //     console.error("Prediction fetch error:", err);
+  //   }
+  // }, []);
+
+
+// Update the fetchPredictions function to include emergency services
+const fetchPredictions = useCallback(async () => {
+  try {
+    const res = await fetch("http://localhost:5002/accident_status");
+    const data = await res.json();
+
+    if (data.lanes) {
+      setLanePredictions(data.lanes);
     }
-  }, []);
 
+    if (data.latest) {
+      setAccidentLane(data.latest.lane);
+      setEmergencyMode(true);
+      
+      // Fetch emergency services when accident detected
+      if (data.latest.emergency_services) {
+        setEmergencyServices(data.latest.emergency_services);
+      }
+    } else {
+      setAccidentLane(null);
+      setEmergencyMode(false);
+      setEmergencyServices([]);
+    }
+
+  } catch (err) {
+    console.error("Prediction fetch error:", err);
+  }
+}, []);
   /* ---------------- FETCH LOGS ---------------- */
 
   const fetchLogs = useCallback(async () => {
@@ -119,7 +156,7 @@ export default function AccidentPage() {
 
   /* ---------------- LIGHT STATE ---------------- */
 
-  const getLightState = (index) => {
+  const getLightState = (index: number) => {
     if (emergencyMode) return "red";
     return index === activeLane ? "green" : "red";
   };
@@ -240,22 +277,48 @@ export default function AccidentPage() {
           </div>
         </div>
 
-        {/* RIGHT SIDE */}
-        <div className="space-y-6">
 
-          {accidentLane && (
-            <div className="bg-white p-4 rounded-xl shadow">
-              <h2 className="font-semibold mb-2">Accident Location</h2>
+{/* RIGHT SIDE */}
+<div className="space-y-6">
 
-              <AccidentMap
-                lat={accidentLocation.lat}
-                lng={accidentLocation.lng}
-              />
+  {accidentLane && (
+    <div className="bg-white p-4 rounded-xl shadow">
+      <h2 className="font-semibold mb-2">Accident Location</h2>
+      <AccidentMap
+        lat={accidentLocation.lat}
+        lng={accidentLocation.lng}
+      />
+    </div>
+  )}
+
+  {emergencyServices.length > 0 && (
+    <div className="bg-white p-4 rounded-xl shadow">
+      <h2 className="font-semibold mb-3 flex items-center gap-2">
+        🚑 Emergency Services Notified
+      </h2>
+      <div className="space-y-2">
+        {emergencyServices.map((service, i) => (
+          <div
+            key={i}
+            className="flex items-start gap-3 p-3 bg-green-50 rounded-lg border-l-4 border-green-500"
+          >
+            <div className="text-2xl">{service.icon}</div>
+            <div className="flex-1">
+              <p className="font-medium">{service.name}</p>
+              <p className="text-sm text-gray-600">{service.distance}</p>
+              <p className="text-xs text-gray-500">ETA: {service.eta}</p>
             </div>
-          )}
+            <div className="text-green-600 text-sm font-semibold">
+              ✓ Notified
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
 
-          <StatsPanel />
-        </div>
+  <StatsPanel />
+</div>
 
         {/* LOGS */}
         <div className="lg:col-span-3">

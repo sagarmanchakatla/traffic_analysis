@@ -139,6 +139,35 @@ LANE_VIDEOS = {
     "lane4": "./uploads/video2.mp4"
 }
 
+# Add this mock data or integrate with real emergency services API
+EMERGENCY_SERVICES = [
+    {
+        "name": "City General Hospital",
+        "icon": "🏥",
+        "distance": "1.2 km away",
+        "eta": "3-5 mins"
+    },
+    {
+        "name": "Emergency Ambulance Service",
+        "icon": "🚑",
+        "distance": "0.8 km away",
+        "eta": "2-3 mins"
+    },
+    {
+        "name": "Fire & Rescue",
+        "icon": "🚒",
+        "distance": "1.5 km away",
+        "eta": "4-6 mins"
+    },
+    {
+        "name": "Traffic Police",
+        "icon": "🚓",
+        "distance": "0.5 km away",
+        "eta": "1-2 mins"
+    }
+]
+
+
 # -------------------------------------------------
 # Global Stores
 # -------------------------------------------------
@@ -269,11 +298,24 @@ def video_feed(lane):
 def accident_logs():
     return jsonify({"logs": accident_log})
 
+# @app.route("/accident_status")
+# def accident_status():
+#     return jsonify({
+#         "lanes": latest_status,
+#         "latest": accident_log[-1] if accident_log else None
+#     })
+
 @app.route("/accident_status")
 def accident_status():
+    latest = accident_log[-1] if accident_log else None
+    
+    # Add emergency_services to latest if accident exists
+    if latest:
+        latest["emergency_services"] = EMERGENCY_SERVICES
+    
     return jsonify({
         "lanes": latest_status,
-        "latest": accident_log[-1] if accident_log else None
+        "latest": latest
     })
 
 @app.route("/clear_logs", methods=["POST"])
