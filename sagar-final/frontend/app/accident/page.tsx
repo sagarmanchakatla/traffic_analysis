@@ -2,56 +2,65 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import StatsPanel from "../../components/accident/StatsPanel";
-import LogsPanel from "../../components/accident/LogsPanel";
+import dynamic from "next/dynamic";
+
+import StatsPanel from "@/components/accident/StatsPanel";
+import LogsPanel from "@/components/accident/LogsPanel";
 import { TrafficLight } from "@/components/TrafficLight";
-import AccidentMap from "@/components/accident/AccidentMap";
+
+// Load Leaflet only on client
+const AccidentMap = dynamic(
+  () => import("@/components/accident/AccidentMap"),
+  { ssr: false }
+);
 
 const LANES = ["lane1", "lane2", "lane3", "lane4"];
 
 export default function AccidentPage() {
 
+  /* ---------------- STATES ---------------- */
+
+  const [lanePredictions, setLanePredictions] = useState({});
+  const [accidentLane, setAccidentLane] = useState(null);
+
   const [accidentLogs, setAccidentLogs] = useState([]);
+
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [blinking, setBlinking] = useState(false);
 
   const [activeLane, setActiveLane] = useState(0);
-  const [greenTimer, setGreenTimer] = useState(20);
+  const [greenTimer, setGreenTimer] = useState(30);
 
-  const [accidentLane, setAccidentLane] = useState(null);
   const [accidentLocation, setAccidentLocation] = useState({
     lat: 18.9690,
-    lng: 72.8194, // Mumbai Central demo
+    lng: 72.8194
   });
 
-  /* -----------------------------------
-     Check Accident Status
-  ------------------------------------*/
+  /* ---------------- FETCH PREDICTIONS ---------------- */
 
-  const fetchAccidentStatus = useCallback(async () => {
+  const fetchPredictions = useCallback(async () => {
     try {
       const res = await fetch("http://localhost:5002/accident_status");
       const data = await res.json();
 
-      if (data.accident) {
-        setAccidentLane(data.lane);
-        setEmergencyMode(true);
+      if (data.lanes) {
+        setLanePredictions(data.lanes);
+      }
 
-        if (data.lat && data.lng) {
-          setAccidentLocation({ lat: data.lat, lng: data.lng });
-        }
+      if (data.latest) {
+        setAccidentLane(data.latest.lane);
+        setEmergencyMode(true);
       } else {
         setAccidentLane(null);
         setEmergencyMode(false);
       }
+
     } catch (err) {
-      console.error("Accident status error:", err);
+      console.error("Prediction fetch error:", err);
     }
   }, []);
 
-  /* -----------------------------------
-     Fetch Logs
-  ------------------------------------*/
+  /* ---------------- FETCH LOGS ---------------- */
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -63,69 +72,59 @@ export default function AccidentPage() {
     }
   }, []);
 
-  /* -----------------------------------
-     Emergency blinking
-  ------------------------------------*/
+  /* ---------------- BLINKING ---------------- */
 
   useEffect(() => {
     if (!emergencyMode) return;
 
     const blink = setInterval(() => {
-      setBlinking((p) => !p);
+      setBlinking((b) => !b);
     }, 500);
 
     return () => clearInterval(blink);
   }, [emergencyMode]);
 
-  /* -----------------------------------
-     Normal traffic timer
-  ------------------------------------*/
+  /* ---------------- TRAFFIC TIMER ---------------- */
 
   useEffect(() => {
     if (emergencyMode) return;
 
     const timer = setInterval(() => {
-      setGreenTimer((prev) => {
-        if (prev <= 1) {
-          setActiveLane((p) => (p + 1) % 4);
+      setGreenTimer((t) => {
+        if (t <= 1) {
+          setActiveLane((l) => (l + 1) % 4);
           return 30;
         }
-        return prev - 1;
+        return t - 1;
       });
     }, 1000);
 
     return () => clearInterval(timer);
   }, [emergencyMode]);
 
-  /* -----------------------------------
-     Polling
-  ------------------------------------*/
+  /* ---------------- POLLING ---------------- */
 
   useEffect(() => {
-    fetchAccidentStatus();
+    fetchPredictions();
     fetchLogs();
 
-    const i1 = setInterval(fetchAccidentStatus, 2000);
-    const i2 = setInterval(fetchLogs, 2000);
+    const p1 = setInterval(fetchPredictions, 2000);
+    const p2 = setInterval(fetchLogs, 2000);
 
     return () => {
-      clearInterval(i1);
-      clearInterval(i2);
+      clearInterval(p1);
+      clearInterval(p2);
     };
-  }, [fetchAccidentStatus, fetchLogs]);
+  }, [fetchPredictions, fetchLogs]);
 
-  /* -----------------------------------
-     Light State
-  ------------------------------------*/
+  /* ---------------- LIGHT STATE ---------------- */
 
-  const getLightState = (index: number) => {
+  const getLightState = (index) => {
     if (emergencyMode) return "red";
     return index === activeLane ? "green" : "red";
   };
 
-  /* -----------------------------------
-     UI
-  ------------------------------------*/
+  /* ---------------- UI ---------------- */
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 lg:p-8">
@@ -142,7 +141,7 @@ export default function AccidentPage() {
       </div>
 
       {/* Header */}
-      <div className="bg-white rounded-xl shadow p-4 mb-6 flex justify-between items-center">
+      <div className="bg-white rounded-xl shadow p-4 mb-6 flex justify-between">
 
         <div>
           <h1 className="text-2xl font-bold">Accident Detection System</h1>
@@ -163,10 +162,10 @@ export default function AccidentPage() {
 
       </div>
 
-      {/* Main Grid */}
+      {/* MAIN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Left - Videos */}
+        {/* LEFT VIDEOS */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
 
           <h2 className="font-semibold mb-4">Traffic Camera Feeds</h2>
@@ -175,6 +174,7 @@ export default function AccidentPage() {
 
             {LANES.map((lane, index) => {
 
+              const laneData = lanePredictions[lane];
               const state = getLightState(index);
               const isAccidentLane = lane === accidentLane;
 
@@ -214,6 +214,25 @@ export default function AccidentPage() {
 
                   </div>
 
+                  {/* PREDICTION */}
+                  {laneData && (
+                    <div className="text-sm">
+                      <span
+                        className={
+                          laneData.pred === "Accident"
+                            ? "text-red-600 font-semibold"
+                            : "text-green-600"
+                        }
+                      >
+                        {laneData.pred}
+                      </span>
+
+                      <span className="ml-2 text-gray-600">
+                        {laneData.prob.toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+
                 </div>
               );
             })}
@@ -221,7 +240,7 @@ export default function AccidentPage() {
           </div>
         </div>
 
-        {/* Right - Map + Stats */}
+        {/* RIGHT SIDE */}
         <div className="space-y-6">
 
           {accidentLane && (
@@ -236,10 +255,9 @@ export default function AccidentPage() {
           )}
 
           <StatsPanel />
-
         </div>
 
-        {/* Logs */}
+        {/* LOGS */}
         <div className="lg:col-span-3">
           <LogsPanel logs={accidentLogs} />
         </div>

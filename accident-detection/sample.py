@@ -14,9 +14,17 @@ model = AccidentDetectionModel("model.json", 'model_weights.h5')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 print('script started')
-# Global variables
-video_path = r"./uploads/test_video.mp4"
 
+# Your 4 different video paths
+lane_videos = {
+    'lane1': r"./uploads/test_video.mp4",
+    'lane2': r"./uploads/video2.mp4",
+    'lane3': r"./uploads/video2.mp4",
+    'lane4': r"./uploads/video2.mp4"
+}
+
+# Store video captures for each lane
+lane_captures = {}
 accident_log = []
 
 def initialize_captures():
