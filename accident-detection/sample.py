@@ -15,7 +15,8 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 
 print('script started')
 # Global variables
-video_path = '/uploads/test_video.mp4'
+video_path = r"C:\Users\Pooja Makhijani\Downloads\Road-Accident-Detection-Alert-System-main\Road-Accident-Detection-Alert-System-main\test_video.mp4"
+
 accident_log = []
 
 def generate_frames():
