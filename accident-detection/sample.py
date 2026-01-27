@@ -3,29 +3,59 @@ from flask_cors import CORS
 import cv2
 from detection import AccidentDetectionModel
 import numpy as np
-import os
 from datetime import datetime
+import threading
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React frontend
+CORS(app)
 
 # Initialize the model
 model = AccidentDetectionModel("model.json", 'model_weights.h5')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 print('script started')
-# Global variables
-video_path = r"C:\Users\Pooja Makhijani\Downloads\Road-Accident-Detection-Alert-System-main\Road-Accident-Detection-Alert-System-main\test_video.mp4"
 
+# Your 4 different video paths
+lane_videos = {
+    'lane1': r"C:\Users\Pooja Makhijani\Downloads\Road-Accident-Detection-Alert-System-main\Road-Accident-Detection-Alert-System-main\test_video.mp4",
+    'lane2': r"C:\Users\Pooja Makhijani\Downloads\vehicle-crash-detector-main\vehicle-crash-detector-main\test_videos\test (20).mp4",
+    'lane3': r"C:\Users\Pooja Makhijani\Downloads\vehicle-crash-detector-main\vehicle-crash-detector-main\test_videos\test (2).mp4",
+    'lane4': r"C:\Users\Pooja Makhijani\Downloads\vehicle-crash-detector-main\vehicle-crash-detector-main\test_videos\test (2).mp4"
+}
+
+# Store video captures for each lane
+lane_captures = {}
 accident_log = []
 
-def generate_frames():
-    """Generator function to yield video frames"""
-    video = cv2.VideoCapture(video_path)
+def initialize_captures():
+    """Initialize video captures for all lanes"""
+    for lane, video_path in lane_videos.items():
+        try:
+            cap = cv2.VideoCapture(video_path)
+            if cap.isOpened():
+                lane_captures[lane] = cap
+                print(f"✅ Initialized capture for {lane}: {video_path}")
+                print(f"   Frame width: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}, height: {int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
+            else:
+                print(f"❌ Failed to open video for {lane}: {video_path}")
+        except Exception as e:
+            print(f"❌ Error initializing {lane}: {e}")
+
+def generate_frames(lane_id):
+    """Generator function to yield video frames for specific lane"""
+    if lane_id not in lane_captures:
+        print(f"❌ No capture for {lane_id}")
+        # Return a black frame as fallback
+        while True:
+            black_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(black_frame, f"No video for {lane_id}", (50, 240), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            ret, buffer = cv2.imencode('.jpg', black_frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
     
-    if not video.isOpened():
-        print(f"Error: Cannot open video file {video_path}")
-        return
+    video = lane_captures[lane_id]
     
     while True:
         ret, frame = video.read()
@@ -41,8 +71,11 @@ def generate_frames():
         # Predict accident
         pred, prob = model.predict_accident(roi[np.newaxis, :, :])
         
+        # Add lane label to frame
+        cv2.putText(frame, f"Lane: {lane_id[-1]}", (20, 40), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
         if pred == "Accident":
-            # Convert numpy float32 to Python float
             prob_val = float(round(prob[0][0] * 100, 2))
             
             # Draw rectangle and text
@@ -51,7 +84,7 @@ def generate_frames():
             
             # Log accident if probability is high
             if prob_val > 80:
-                log_accident(prob_val)
+                log_accident(prob_val, lane_id)
         else:
             prob_val = float(round(prob[0][1] * 100, 2))
             cv2.rectangle(frame, (0, 0), (280, 40), (0, 255, 0), -1)
@@ -63,160 +96,96 @@ def generate_frames():
         
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-    
-    video.release()
 
-def log_accident(probability):
-    """Log accident detection with timestamp"""
+def log_accident(probability, lane_id):
+    """Log accident detection with timestamp and lane"""
     global accident_log
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     # Avoid duplicate logs within 2 seconds
     if not accident_log or (datetime.now() - datetime.strptime(accident_log[-1]['timestamp'], "%Y-%m-%d %H:%M:%S")).seconds > 2:
-        # Ensure probability is a Python float, not numpy float32
         accident_log.append({
             'timestamp': timestamp,
-            'probability': float(probability),  # Convert to Python float
+            'probability': float(probability),
             'severity': 'high' if probability > 90 else 'medium',
-            'location': 'Mumbai Central Junction'  # You can make this dynamic
+            'location': f'Lane {lane_id[-1]}',
+            'lane': lane_id
         })
+        
         # Keep only last 50 logs
         if len(accident_log) > 50:
             accident_log.pop(0)
         
-        print(f"Accident logged: {probability}% at {timestamp}")
+        print(f"🚨 Accident logged for {lane_id}: {probability}% at {timestamp}")
+
+# Initialize captures
+initialize_captures()
 
 @app.route('/')
 def index():
-    """Render the main page"""
     return render_template('index.html')
 
-@app.route('/video_feed')
-def video_feed():
-    """Video streaming route"""
-    return Response(generate_frames(),
+@app.route('/video_feed/<lane_id>')
+def video_feed(lane_id):
+    """Video streaming route for specific lane"""
+    if lane_id not in ['lane1', 'lane2', 'lane3', 'lane4']:
+        return "Invalid lane", 404
+    
+    print(f"📹 Streaming video for {lane_id}")
+    return Response(generate_frames(lane_id),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@app.route('/accident_feed')
-def accident_feed():
-    """Accident video feed for React component"""
-    return Response(generate_frames(),
+@app.route('/video_feed')
+def default_video_feed():
+    """Default video feed (for backward compatibility)"""
+    return Response(generate_frames('lane1'),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/accident_logs')
 def get_accident_logs():
-    """API endpoint to get accident logs"""
     try:
-        # Double-check all values are JSON serializable
         serializable_logs = [
             {
                 'timestamp': log['timestamp'],
                 'probability': float(log['probability']),
                 'severity': log.get('severity', 'medium'),
-                'location': log.get('location', 'Unknown')
+                'location': log.get('location', 'Unknown'),
+                'lane': log.get('lane', 'lane1')
             }
             for log in accident_log
         ]
         return jsonify({'logs': serializable_logs, 'count': len(serializable_logs)})
     except Exception as e:
-        print(f"Error serializing logs: {e}")
+        print(f"❌ Error serializing logs: {e}")
         return jsonify({'logs': [], 'count': 0, 'error': str(e)})
-
-@app.route('/accident_status')
-def accident_status():
-    """Check if accident was recently detected"""
-    try:
-        if accident_log:
-            latest = accident_log[-1]
-            # Check if accident was detected in last 5 seconds
-            time_diff = (datetime.now() - datetime.strptime(latest['timestamp'], "%Y-%m-%d %H:%M:%S")).seconds
-            
-            if time_diff < 5:
-                return jsonify({
-                    'accident_detected': True,
-                    'severity': latest.get('severity', 'high'),
-                    'confidence': float(latest['probability']) / 100,
-                    'timestamp': latest['timestamp']
-                })
-        
-        return jsonify({'accident_detected': False})
-    except Exception as e:
-        print(f"Error in accident_status: {e}")
-        return jsonify({'accident_detected': False, 'error': str(e)})
 
 @app.route('/clear_logs', methods=['POST'])
 def clear_logs():
-    """Clear accident logs"""
     global accident_log
     accident_log = []
     return jsonify({'status': 'success', 'message': 'Logs cleared'})
 
-@app.route('/dispatch_emergency', methods=['POST'])
-def dispatch_emergency():
-    """Handle emergency service dispatch"""
-    try:
-        from flask import request
-        data = request.json
-        
-        print(f"Emergency dispatched for accident {data.get('accident_id')}")
-        print(f"Location: {data.get('location')}")
-        print(f"Services: {data.get('services')}")
-        
-        # Here you would integrate with actual emergency services API
-        # For now, just log and return success
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Emergency services dispatched',
-            'accident_id': data.get('accident_id')
-        })
-    except Exception as e:
-        print(f"Error dispatching emergency: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-@app.route('/upload_accident_video', methods=['POST'])
-def upload_accident_video():
-    """Handle video upload for accident detection"""
-    try:
-        from flask import request
-        
-        if 'video' not in request.files:
-            return jsonify({'error': 'No video file provided'}), 400
-        
-        video_file = request.files['video']
-        location_data = request.form.get('location')
-        
-        # Save the uploaded video
-        upload_path = os.path.join('uploads', video_file.filename)
-        os.makedirs('uploads', exist_ok=True)
-        video_file.save(upload_path)
-        
-        # Update global video path
-        global video_path
-        video_path = upload_path
-        
-        print(f"Video uploaded: {upload_path}")
-        print(f"Location: {location_data}")
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Video uploaded successfully',
-            'filename': video_file.filename
-        })
-    except Exception as e:
-        print(f"Error uploading video: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/health')
-def health():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'model_loaded': model is not None,
-        'accidents_logged': len(accident_log)
-    })
+@app.route('/lane_info')
+def lane_info():
+    """Get information about all lanes"""
+    info = {}
+    for lane_id in ['lane1', 'lane2', 'lane3', 'lane4']:
+        if lane_id in lane_captures:
+            cap = lane_captures[lane_id]
+            info[lane_id] = {
+                'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                'fps': cap.get(cv2.CAP_PROP_FPS),
+                'frame_count': int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+                'video_path': lane_videos[lane_id]
+            }
+        else:
+            info[lane_id] = {'error': 'Video not loaded'}
+    return jsonify(info)
 
 if __name__ == '__main__':
-    print("Starting Accident Detection Server on port 5002...")
-    print(f"Video path: {video_path}")
+    print("🚀 Starting Accident Detection Server on port 5002...")
+    print("📊 Available lanes:")
+    for lane in lane_videos.keys():
+        print(f"   - {lane}: {lane_videos[lane]}")
     app.run(debug=True, threaded=True, host='0.0.0.0', port=5002)

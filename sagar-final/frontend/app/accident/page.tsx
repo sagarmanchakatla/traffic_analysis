@@ -165,7 +165,7 @@ export default function AccidentPage() {
             <div className="bg-white rounded-xl shadow p-6">
               <h2 className="text-lg font-semibold mb-6">Traffic Camera Feeds</h2>
               
-              {/* 4 Lane Grid */}
+              {/* 4 Lane Grid - EACH LANE WITH ITS OWN VIDEO FEED */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {lanes.map((lane, index) => {
                   const lightStates = getLightState(index);
@@ -185,10 +185,24 @@ export default function AccidentPage() {
                       </div>
                       
                       <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+                        {/* Each lane shows its own video feed from the backend */}
                         <img
-                          src="http://localhost:5002/video_feed"
+                          src={`http://localhost:5002/video_feed/${lane}`}
                           className="w-full h-full object-cover"
                           alt={`${lane} live feed`}
+                          onError={(e) => {
+                            // Fallback if video fails to load
+                            const target = e.target as HTMLImageElement;
+                            target.onerror = null;
+                            target.src = `data:image/svg+xml,${encodeURIComponent(`
+                              <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="100%" height="100%" fill="#111827"/>
+                                <text x="50%" y="50%" text-anchor="middle" fill="white" dy=".3em" font-family="Arial">
+                                  ${lane.replace("lane", "Lane ")} Feed
+                                </text>
+                              </svg>
+                            `)}`;
+                          }}
                         />
                         
                         {/* Traffic Light Overlay */}
