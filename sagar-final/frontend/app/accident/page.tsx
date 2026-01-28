@@ -22,10 +22,75 @@ export default function AccidentPage() {
   const [activeLane, setActiveLane] = useState<number>(0);
   const [greenTimer, setGreenTimer] = useState<number>(20);
 
-  const lanes: LaneId[] = ["lane1", "lane2", "lane3", "lane4"];
+  const [accidentLocation, setAccidentLocation] = useState({
+    lat: 18.9690,
+    lng: 72.8194
+  });
 
-  // Check for emergency mode (accident > 95%)
-  const checkEmergencyMode = useCallback(async () => {
+  const [emergencyServices, setEmergencyServices] = useState<Array<{
+  name: string;
+  icon: string;
+  distance: string;
+  eta: string;
+}>>([]);
+
+
+  /* ---------------- FETCH PREDICTIONS ---------------- */
+
+  // const fetchPredictions = useCallback(async () => {
+  //   try {
+  //     const res = await fetch("http://localhost:5002/accident_status");
+  //     const data = await res.json();
+
+  //     if (data.lanes) {
+  //       setLanePredictions(data.lanes);
+  //     }
+
+  //     if (data.latest) {
+  //       setAccidentLane(data.latest.lane);
+  //       setEmergencyMode(true);
+  //     } else {
+  //       setAccidentLane(null);
+  //       setEmergencyMode(false);
+  //     }
+
+  //   } catch (err) {
+  //     console.error("Prediction fetch error:", err);
+  //   }
+  // }, []);
+
+
+// Update the fetchPredictions function to include emergency services
+const fetchPredictions = useCallback(async () => {
+  try {
+    const res = await fetch("http://localhost:5002/accident_status");
+    const data = await res.json();
+
+    if (data.lanes) {
+      setLanePredictions(data.lanes);
+    }
+
+    if (data.latest) {
+      setAccidentLane(data.latest.lane);
+      setEmergencyMode(true);
+      
+      // Fetch emergency services when accident detected
+      if (data.latest.emergency_services) {
+        setEmergencyServices(data.latest.emergency_services);
+      }
+    } else {
+      setAccidentLane(null);
+      setEmergencyMode(false);
+      setEmergencyServices([]);
+    }
+
+  } catch (err) {
+    console.error("Prediction fetch error:", err);
+  }
+}, []);
+  /* ---------------- FETCH LOGS ---------------- */
+
+  const fetchLogs = useCallback(async () => {
     try {
       const res = await fetch("http://localhost:5002/accident_logs");
       const data = await res.json();
@@ -83,30 +148,14 @@ export default function AccidentPage() {
     return () => clearInterval(interval);
   }, [checkEmergencyMode]);
 
-  // Determine light states for each lane
-  const getLightState = (laneIndex: number) => {
-    if (emergencyMode) {
-      return {
-        lightState: "red" as const,
-        isActive: false,
-        secondsRemaining: undefined,
-      };
-    }
+  /* ---------------- LIGHT STATE ---------------- */
 
-    if (laneIndex === activeLane) {
-      return {
-        lightState: "green" as const,
-        isActive: true,
-        secondsRemaining: greenTimer,
-      };
-    } else {
-      return {
-        lightState: "red" as const,
-        isActive: false,
-        secondsRemaining: undefined,
-      };
-    }
+  const getLightState = (index: number) => {
+    if (emergencyMode) return "red";
+    return index === activeLane ? "green" : "red";
   };
+
+  /* ---------------- UI ---------------- */
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 lg:p-8">
@@ -158,101 +207,126 @@ export default function AccidentPage() {
           </div>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Video Feeds with Traffic Signals */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold mb-6">Traffic Camera Feeds</h2>
-              
-              {/* 4 Lane Grid - EACH LANE WITH ITS OWN VIDEO FEED */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {lanes.map((lane, index) => {
-                  const lightStates = getLightState(index);
-                  
-                  return (
-                    <div key={lane} className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-medium">
-                          {lane.replace("lane", "Lane ")}
-                          {lightStates.isActive && " • Active"}
-                        </h3>
-                        {lightStates.secondsRemaining !== undefined && (
-                          <div className="bg-gray-100 px-3 py-1 rounded">
-                            <span className="font-mono font-medium">{lightStates.secondsRemaining}s</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                        {/* Each lane shows its own video feed from the backend */}
-                        <img
-                          src={`http://localhost:5002/video_feed/${lane}`}
-                          className="w-full h-full object-cover"
-                          alt={`${lane} live feed`}
-                          onError={(e) => {
-                            // Fallback if video fails to load
-                            const target = e.target as HTMLImageElement;
-                            target.onerror = null;
-                            target.src = `data:image/svg+xml,${encodeURIComponent(`
-                              <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="100%" height="100%" fill="#111827"/>
-                                <text x="50%" y="50%" text-anchor="middle" fill="white" dy=".3em" font-family="Arial">
-                                  ${lane.replace("lane", "Lane ")} Feed
-                                </text>
-                              </svg>
-                            `)}`;
-                          }}
-                        />
-                        
-                        {/* Traffic Light Overlay */}
-                        <div className="absolute bottom-3 right-3">
-                          <TrafficLight
-                            state={lightStates.lightState}
-                            size="sm"
-                            isBlinking={emergencyMode && blinking}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            emergencyMode ? (blinking ? 'bg-red-500' : 'bg-red-300') :
-                            lightStates.isActive ? 'bg-green-500' : 'bg-red-500'
-                          }`}></div>
-                          <span>
-                            {emergencyMode ? 'Red Blinking' :
-                             lightStates.isActive ? 'Green' : 'Red'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Emergency Status */}
-              {emergencyMode && (
-                <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full bg-red-500 ${blinking ? 'opacity-100' : 'opacity-30'}`}></div>
-                    <div>
-                      <p className="font-medium text-red-700">Emergency Mode Active</p>
-                      <p className="text-sm text-red-600 mt-1">
-                        Accident detected with confidence &gt;95%. All signals blinking red.
-                      </p>
-                    </div>
+      {/* MAIN GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* LEFT VIDEOS */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
+
+          <h2 className="font-semibold mb-4">Traffic Camera Feeds</h2>
+
+          <div className="grid md:grid-cols-2 gap-4">
+
+            {LANES.map((lane, index) => {
+
+              const laneData = lanePredictions[lane];
+              const state = getLightState(index);
+              const isAccidentLane = lane === accidentLane;
+
+              return (
+                <div
+                  key={lane}
+                  className={`space-y-2 p-2 rounded-lg
+                  ${isAccidentLane ? "ring-4 ring-red-500" : ""}`}
+                >
+
+                  <div className="flex justify-between">
+                    <span className="font-medium">
+                      {lane.toUpperCase()}
+                      {isAccidentLane && " 🚨"}
+                    </span>
+
+                    {state === "green" && !emergencyMode && (
+                      <span>{greenTimer}s</span>
+                    )}
                   </div>
+
+                  <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+
+                    <img
+                      src={`http://localhost:5002/video_feed/${lane}`}
+                      className="w-full h-full object-cover"
+                      alt={lane}
+                    />
+
+                    <div className="absolute bottom-2 right-2">
+                      <TrafficLight
+                        state={state}
+                        size="sm"
+                        isBlinking={emergencyMode && blinking}
+                      />
+                    </div>
+
+                  </div>
+
+                  {/* PREDICTION */}
+                  {laneData && (
+                    <div className="text-sm">
+                      <span
+                        className={
+                          laneData.pred === "Accident"
+                            ? "text-red-600 font-semibold"
+                            : "text-green-600"
+                        }
+                      >
+                        {laneData.pred}
+                      </span>
+
+                      <span className="ml-2 text-gray-600">
+                        {laneData.prob.toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+
                 </div>
-              )}
+              );
+            })}
+
+          </div>
+        </div>
+
+
+{/* RIGHT SIDE */}
+<div className="space-y-6">
+
+  {accidentLane && (
+    <div className="bg-white p-4 rounded-xl shadow">
+      <h2 className="font-semibold mb-2">Accident Location</h2>
+      <AccidentMap
+        lat={accidentLocation.lat}
+        lng={accidentLocation.lng}
+      />
+    </div>
+  )}
+
+  {emergencyServices.length > 0 && (
+    <div className="bg-white p-4 rounded-xl shadow">
+      <h2 className="font-semibold mb-3 flex items-center gap-2">
+        🚑 Emergency Services Notified
+      </h2>
+      <div className="space-y-2">
+        {emergencyServices.map((service, i) => (
+          <div
+            key={i}
+            className="flex items-start gap-3 p-3 bg-green-50 rounded-lg border-l-4 border-green-500"
+          >
+            <div className="text-2xl">{service.icon}</div>
+            <div className="flex-1">
+              <p className="font-medium">{service.name}</p>
+              <p className="text-sm text-gray-600">{service.distance}</p>
+              <p className="text-xs text-gray-500">ETA: {service.eta}</p>
+            </div>
+            <div className="text-green-600 text-sm font-semibold">
+              ✓ Notified
             </div>
           </div>
+        ))}
+      </div>
+    </div>
+  )}
 
-          {/* Right: Stats Panel */}
-          <div className="lg:col-span-1">
-            <StatsPanel />
-          </div>
+  <StatsPanel />
+</div>
 
           {/* Bottom: Logs Panel */}
           <div className="lg:col-span-3">

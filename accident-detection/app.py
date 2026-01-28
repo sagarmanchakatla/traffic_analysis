@@ -63,6 +63,7 @@ EMERGENCY_SERVICES = [
     }
 ]
 
+
 # -------------------------------------------------
 # Global Stores - ADDED EMERGENCY MODE FLAG
 # -------------------------------------------------
@@ -251,37 +252,26 @@ def video_feed(lane):
 
 @app.route("/accident_logs")
 def accident_logs():
-    # Filter to show only emergency logs (≥98%)
-    emergency_logs = [log for log in accident_log if log.get("probability", 0) >= emergency_threshold]
-    
-    return jsonify({
-        "logs": accident_log,
-        "emergency_logs": emergency_logs,  # Only ≥98% logs
-        "emergency_mode": emergency_mode,  # ADDED
-        "threshold": emergency_threshold,   # ADDED
-        "emergency_count": len(emergency_logs)  # Count of ≥98% logs
-    })
+    return jsonify({"logs": accident_log})
+
+# @app.route("/accident_status")
+# def accident_status():
+#     return jsonify({
+#         "lanes": latest_status,
+#         "latest": accident_log[-1] if accident_log else None
+#     })
 
 @app.route("/accident_status")
 def accident_status():
     latest = accident_log[-1] if accident_log else None
     
-    # Check if latest log is an emergency (≥98%)
-    latest_is_emergency = False
-    if latest and latest.get("probability", 0) >= emergency_threshold:
-        latest_is_emergency = True
+    # Add emergency_services to latest if accident exists
+    if latest:
         latest["emergency_services"] = EMERGENCY_SERVICES
-    
-    # Count emergency incidents (≥98%)
-    emergency_incidents = [log for log in accident_log if log.get("probability", 0) >= emergency_threshold]
     
     return jsonify({
         "lanes": latest_status,
-        "latest": latest,
-        "emergency_mode": emergency_mode,
-        "emergency_count": len(emergency_incidents),
-        "threshold": emergency_threshold,
-        "latest_is_emergency": latest_is_emergency
+        "latest": latest
     })
 
 @app.route("/clear_logs", methods=["POST"])
