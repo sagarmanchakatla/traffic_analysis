@@ -1,0 +1,10 @@
+numpy
+pandas
+opencv-python
+tensorflow
+keras
+Flask==3.0.0
+matplotlib
+pydot
+graphviz
+flask_cors
